@@ -1,0 +1,14 @@
+artifact_uri: file:///C:/Users/Ayush/Desktop/supplychain/mlruns/0/53ac75c108b649cab5d246323658fb18/artifacts
+end_time: 1752779911883
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 53ac75c108b649cab5d246323658fb18
+run_name: Category_Demand_Forecast_Training
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1752779243112
+status: 3
+tags: []
+user_id: Ayush
