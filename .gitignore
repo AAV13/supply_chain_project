@@ -8,5 +8,5 @@ __pycache__/
 .idea/
 .DS_Store
 
-# Saved models directory (should be generated on the server)
-/saved_models/
+# Saved models directory (should maybe be generated on the server)
+#/saved_models/
