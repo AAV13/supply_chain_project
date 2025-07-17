@@ -86,3 +86,28 @@ The pipeline runs in three stages: preprocessing, model training, and serving th
 
 **Step 1: Run the Preprocessing Script**
 First, you need to generate the clean data file. (You only need to do this once).
+```
+# Assuming your preprocessing code is in 'preprocess.py'
+python preprocess.py
+```
+This will create the `preprocessed_supply_chain_data.csv` file.
+
+**Step 2: Train the Models**
+Next, run the main modeling script. This will train a model for each category and save the trained models to the `saved_models/` directory.
+```
+python model.py
+```
+
+**Step 3: Run the FastAPI Server**
+Finally, start the web server to serve the recommendations via the API.
+```
+uvicorn main:app --reload
+```
+
+## API Usage
+
+Once the server is running, you can access the interactive API documentation (Swagger UI) in your browser at:
+
+[**http://127.0.0.1:8000/docs**](http://127.0.0.1:8000/docs)
+
+From this page, you can use the `/recommendations/` endpoint to get live inventory and strategic alerts by providing your current stock levels in a JSON format. This API is designed to be called by an automation tool like n8n to complete the AI agent workflow.
