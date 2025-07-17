@@ -2,14 +2,16 @@
 
 ## Overview
 
-This project builds and deploys a high-performance API that serves as the predictive engine for an AI-powered supply chain agent. The API ingests historical sales data, forecasts future demand for product categories, and provides two layers of actionable recommendations.
+This project provides a RESTful API for forecasting product demand across various categories. It uses historical supply chain data to train individual Random Forest models for each product category and serves predictions through a FastAPI backend.
 
-This service is designed to be called by automation platforms like **n8n**, Zapier, or custom scripts to create a true, end-to-end AI agent that can make automated, data-driven decisions.
+This service is designed to be called by automation platforms like **n8n** to create a true, end-to-end AI agent that can make automated, data-driven decisions.
 
 The API provides two types of insights:
 
 1.  **Tactical Inventory Alerts**: Recommends when and how much inventory to reorder to prevent stockouts while minimizing costs.
 2.  **Strategic Logistics Alerts**: Identifies high-risk or high-cost product categories and suggests strategic changes to improve performance.
+
+The primary goal of this project is to predict future product demand based on historical data points like sales, price, and stock levels. By training a separate regression model for each product category, the API can deliver tailored forecasts, which is essential for optimizing inventory, logistics, and overall supply chain efficiency. The application is built with FastAPI, ensuring high performance and automatic interactive documentation.
 
 The entire system is deployed as a robust FastAPI web service, making these insights available via a simple API call.
 
