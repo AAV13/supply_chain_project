@@ -37,9 +37,9 @@ class SupplyChainOptimizer:
     An AI agent that forecasts demand and optimizes inventory for a supply chain.
     It assumes it is being fed a preprocessed data file.
     """
-    def __init__(self, preprocessed_data_path: str, models_dir: str = "saved_models"):
-        """Initializes the optimizer with the path to the clean data."""
-        self.preprocessed_data_path = Path(preprocessed_data_path)
+    def __init__(self, preprocessed_data_url: str, models_dir: str = "saved_models"):
+        """Initializes the optimizer with the URL to the clean data."""
+        self.preprocessed_data_url = preprocessed_data_url
         self.models_dir = Path(models_dir)
         self.data: pd.DataFrame = None
         self.demand_models: Dict[str, Prophet] = {}
@@ -54,17 +54,14 @@ class SupplyChainOptimizer:
 
     def load_preprocessed_data(self) -> bool:
         """
-        Loads the preprocessed data and prepares it for modeling.
+        Loads the preprocessed data from a URL and prepares it for modeling.
         """
-        logger.info(f"Loading preprocessed data from {self.preprocessed_data_path}")
+        logger.info(f"Loading preprocessed data from URL...")
         try:
-            # Load the clean data, ensuring the date column is parsed correctly
-            self.data = pd.read_csv(self.preprocessed_data_path, parse_dates=['order_date'])
-        except FileNotFoundError:
-            logger.error(f"File not found: {self.preprocessed_data_path}")
-            return False
+            # Read the data directly from the public URL
+            self.data = pd.read_csv(self.preprocessed_data_url, parse_dates=['order_date'])
         except Exception as e:
-            logger.error(f"Failed to load data: {e}")
+            logger.error(f"Failed to load data from URL: {self.preprocessed_data_url}. Error: {e}")
             return False
 
         # Calculate category-level statistics for use in optimization
@@ -216,7 +213,7 @@ class SupplyChainOptimizer:
                     f"Recommended order quantity (EOQ): {economic_order_quantity:.0f} units."
                 )
                 recommendations.append(rec_text)
-                
+            
         if not recommendations:
             recommendations.append("All category stock levels are sufficient.")
         return recommendations
@@ -253,7 +250,7 @@ class SupplyChainOptimizer:
                     f"Consider a leaner inventory policy (e.g., higher service level, more frequent reviews)."
                 )
                 alerts.append(alert_text)
-        
+            
         return alerts
 
 
