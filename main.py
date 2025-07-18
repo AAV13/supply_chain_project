@@ -1,9 +1,10 @@
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 from typing import Dict, List
 from contextlib import asynccontextmanager
 import logging
+import uuid
 
 # Import the SupplyChainOptimizer class from your existing model.py file
 # Ensure that model.py is in the same directory as this main.py file.
@@ -15,16 +16,14 @@ logger = logging.getLogger(__name__)
 
 
 # --- 1. Define the Lifespan Context Manager for Startup/Shutdown ---
-# This is the new, recommended way to handle startup events.
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     This function runs on application startup to load the AI agent and models.
     """
-    logger.info("Server is starting up...")
+    logger.info("Server is starting up. Loading AI agent...")
     
     # Initialize the optimizer and attach it to the app's state
-    # This makes it accessible in our API endpoints.
     app.state.optimizer = SupplyChainOptimizer("preprocessed_supply_chain_data.csv")
     
     # Load the data needed for statistics and model loading
@@ -37,25 +36,54 @@ async def lifespan(app: FastAPI):
     if not app.state.optimizer.demand_models:
         raise RuntimeError("No models were loaded. Ensure models are saved in the 'saved_models' directory.")
         
-    logger.info("Loaded successfully and is ready to serve requests.")
+    logger.info("AI Agent loaded successfully and is ready to serve requests.")
     
     yield
     
-    # Code below `yield` would run on shutdown (e.g., for cleanup)
     logger.info("Server is shutting down.")
 
 
 # --- 2. Initialize the FastAPI App with the Lifespan Manager ---
 app = FastAPI(
     lifespan=lifespan,
-    title="Supply Chain API",
+    title="Supply Chain AI Agent API",
     description="An API to get demand forecasts and inventory recommendations.",
     version="1.0.0"
 )
 
+# --- 3. In-Memory Storage for Task Results ---
+# In a production system, you would use a more robust solution like Redis or a database.
+task_results: Dict[str, Dict] = {}
 
-# --- 3. Define the API Request and Response Models ---
-# Pydantic models ensure that the data sent to our API is in the correct format.
+
+# --- 4. Define the Background Task Function ---
+def run_optimization_task(task_id: str, current_stock: Dict[str, float]):
+    """
+    This function contains the heavy computation and is run in the background.
+    """
+    logger.info(f"Starting background task: {task_id}")
+    try:
+        # Access the globally loaded optimizer
+        optimizer = app.state.optimizer
+        
+        # Perform the heavy calculations
+        inventory_recs = optimizer.generate_inventory_recommendations(current_stock)
+        logistics_alerts = optimizer.generate_logistics_alerts()
+        
+        # Store the results in our global dictionary
+        task_results[task_id] = {
+            "status": "completed",
+            "inventory_recommendations": inventory_recs,
+            "strategic_alerts": logistics_alerts
+        }
+        logger.info(f"Background task {task_id} completed successfully.")
+        
+    except Exception as e:
+        logger.error(f"Background task {task_id} failed: {e}")
+        task_results[task_id] = {"status": "failed", "error": str(e)}
+
+
+# --- 5. Define the API Request and Response Models ---
 class StockLevels(BaseModel):
     current_stock: Dict[str, float] = Field(
         ..., 
@@ -78,54 +106,55 @@ class StockLevels(BaseModel):
         }
     )
 
+class TaskResponse(BaseModel):
+    task_id: str
+    status: str
+
 class ApiResponse(BaseModel):
+    status: str
     inventory_recommendations: List[str]
     strategic_alerts: List[str]
 
 
-# --- 4. Create the API Endpoint ---
-@app.post("/recommendations/", response_model=ApiResponse)
-def get_recommendations(stock_levels: StockLevels):
+# --- 6. Create the API Endpoints ---
+@app.post("/recommendations/", response_model=TaskResponse, status_code=202)
+def start_recommendations_task(stock_levels: StockLevels, background_tasks: BackgroundTasks):
     """
-    This is the main API endpoint. It takes the current stock levels
-    and returns a set of AI-driven recommendations.
+    Accepts a request to generate recommendations and starts a background task.
+    Responds immediately with a task ID.
     """
-    # Access the optimizer from the application state
-    if not hasattr(app.state, 'optimizer') or app.state.optimizer is None:
-        raise HTTPException(status_code=503, detail="Optimizer is not ready. Please wait a moment and try again.")
+
+    # Generate a unique ID for this task
+    task_id = str(uuid.uuid4())
+    task_results[task_id] = {"status": "processing"}
     
-    try:
-        # Get the two types of recommendations from our agent
-        inventory_recs = app.state.optimizer.generate_inventory_recommendations(stock_levels.current_stock)
-        logistics_alerts = app.state.optimizer.generate_logistics_alerts()
+    # Add the heavy computation to the background tasks
+    background_tasks.add_task(run_optimization_task, task_id, stock_levels.current_stock)
+    
+    # Ensure the response contains the task_id and status.
+    return {"task_id": task_id, "status": "processing"}
+
+
+@app.get("/results/{task_id}", response_model=ApiResponse)
+def get_task_results(task_id: str):
+    """
+    Fetches the results of a background task using its task ID.
+    """
+    result = task_results.get(task_id)
+    
+    if not result:
+        raise HTTPException(status_code=404, detail="Task ID not found.")
+    
+    if result["status"] == "processing":
+        raise HTTPException(status_code=202, detail="Task is still processing. Please try again in a moment.")
         
-        # Return them in a structured JSON response
-        return {
-            "inventory_recommendations": inventory_recs,
-            "strategic_alerts": logistics_alerts
-        }
-    except Exception as e:
-        # If anything goes wrong, return a server error
-        raise HTTPException(status_code=500, detail=f"An internal error occurred: {str(e)}")
+    if result["status"] == "failed":
+        raise HTTPException(status_code=500, detail=f"Task failed: {result.get('error')}")
+
+    return result
 
 
-# --- 5. Add a Root Endpoint for Health Checks ---
 @app.get("/")
 def read_root():
     """A simple endpoint to check if the API is running."""
     return {"status": "Supply Chain AI Agent is running."}
-
-# --- How to Run This Server ---
-# 1. Make sure you have the required libraries installed:
-#    pip install fastapi "uvicorn[standard]"
-#
-# 2. Save this code as `main.py`.
-#
-# 3. In your terminal, run the following command from the same directory:
-#    uvicorn main:app --reload
-#
-# 4. Open your web browser and go to http://127.0.0.1:8000/docs
-#    This will open the interactive API documentation (Swagger UI).
-#
-# 5. From the documentation, you can test the `/recommendations/` endpoint
-#    by providing a JSON object with your current stock levels.
