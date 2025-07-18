@@ -76,8 +76,14 @@ def run_optimization_task(task_id: str, current_stock: Dict[str, float]):
         optimizer = app.state.optimizer
         redis_client = app.state.redis
         
+        # ** NEW **: Added detailed logging for progress tracking
+        logger.info(f"[{task_id}] Generating inventory recommendations...")
         inventory_recs = optimizer.generate_inventory_recommendations(current_stock)
+        logger.info(f"[{task_id}] Finished inventory recommendations.")
+        
+        logger.info(f"[{task_id}] Generating strategic logistics alerts...")
         logistics_alerts = optimizer.generate_logistics_alerts()
+        logger.info(f"[{task_id}] Finished strategic logistics alerts.")
         
         result_data = {
             "status": "completed",
@@ -90,7 +96,7 @@ def run_optimization_task(task_id: str, current_stock: Dict[str, float]):
         logger.info(f"Background task {task_id} completed successfully.")
         
     except Exception as e:
-        logger.error(f"Background task {task_id} failed: {e}")
+        logger.error(f"Background task {task_id} failed: {e}", exc_info=True) # Log the full traceback
         error_data = {"status": "failed", "error": str(e)}
         app.state.redis.set(task_id, json.dumps(error_data), ex=3600)
 
