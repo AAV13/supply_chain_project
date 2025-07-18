@@ -16,6 +16,7 @@ from model import SupplyChainOptimizer
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+
 # --- 1. Define the Lifespan Context Manager for Startup/Shutdown ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -26,7 +27,7 @@ async def lifespan(app: FastAPI):
     logger.info("Server is starting up. Loading AI agent and connecting to Redis...")
     
     # --- Connect to Redis ---
-    # Render provides the REDIS_URL environment variable automatically
+    # Render or another provider sets the REDIS_URL environment variable
     redis_url = os.getenv("REDIS_URL")
     if not redis_url:
         raise RuntimeError("REDIS_URL environment variable not set. Cannot connect to Redis.")
@@ -96,7 +97,26 @@ def run_optimization_task(task_id: str, current_stock: Dict[str, float]):
 
 # --- 4. Define the API Request and Response Models ---
 class StockLevels(BaseModel):
-    current_stock: Dict[str, float] = Field(..., example={"Sporting Goods": 15000.0})
+    current_stock: Dict[str, float] = Field(
+        ..., 
+        example={
+            'Sporting Goods': 15000.0,
+            'Cleats': 25000.0,
+            "Women's Apparel": 40000.0,
+            "Men's Footwear": 10000.0,
+            "Camping & Hiking": 500.0,
+            "Accessories": 10.0,
+            "Golf Gloves": 5.0,
+            'Indoor/Outdoor Games': 8000.0,
+            'Shop By Sport': 12000.0,
+            'Fishing': 3000.0,
+            'Cardio Equipment': 20.0,
+            'Water Sports': 4000.0,
+            'Electronics': 9000.0,
+            'Girls\' Apparel': 18000.0,
+            'Golf Balls': 5000.0
+        }
+    )
 
 class TaskResponse(BaseModel):
     task_id: str
