@@ -19,7 +19,10 @@ async def lifespan(app: FastAPI):
     """Initialize the SupplyChainOptimizer and load models on startup."""
     logger.info("Server is starting up...")
 
-    app.state.optimizer = SupplyChainOptimizer("preprocessed_supply_chain_data.csv")
+    # The correct, permanent URL to your data file
+    DATA_URL = "https://github.com/AAV13/supply_chain_project/releases/download/v1.0.0/preprocessed_supply_chain_data.csv"
+    
+    app.state.optimizer = SupplyChainOptimizer(preprocessed_data_url=DATA_URL)
 
     if not app.state.optimizer.load_preprocessed_data():
         raise RuntimeError("Failed to load preprocessed data.")
