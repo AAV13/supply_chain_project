@@ -41,8 +41,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     lifespan=lifespan,
     title="Supply Chain API",
-    description="An API to get demand forecasts and inventory recommendations.",
-    version="1.0.0"
+    description="An API to get demand forecasts and inventory recommendations for a specific category.",
+    version="1.1.0"
 )
 
 
@@ -51,21 +51,11 @@ class StockLevels(BaseModel):
     current_stock: Dict[str, float] = Field(
         ..., 
         example={
-            'Accessories': 10.0,
-            'Camping & Hiking': 500.0,
-            'Cardio Equipment': 20.0,
-            'Cleats': 25000.0,
-            'Electronics': 9000.0,
-            'Fishing': 3000.0,
-            "Girls' Apparel": 18000.0,
-            'Golf Balls': 5000.0,
-            'Golf Gloves': 5.0,
-            'Indoor/Outdoor Games': 8000.0,
-            "Men's Footwear": 10000.0,
-            'Shop By Sport': 12000.0,
-            'Sporting Goods': 15000.0,
-            'Water Sports': 4000.0,
-            "Women's Apparel": 40000.0
+            'Accessories': 10.0, 'Camping & Hiking': 500.0, 'Cardio Equipment': 20.0,
+            'Cleats': 25000.0, 'Electronics': 9000.0, 'Fishing': 3000.0,
+            "Girls' Apparel": 18000.0, 'Golf Balls': 5000.0, 'Golf Gloves': 5.0,
+            'Indoor/Outdoor Games': 8000.0, "Men's Footwear": 10000.0, 'Shop By Sport': 12000.0,
+            'Sporting Goods': 15000.0, 'Water Sports': 4000.0, "Women's Apparel": 40000.0
         }
     )
 
@@ -74,22 +64,34 @@ class ApiResponse(BaseModel):
     strategic_alerts: List[str]
 
 
-# --- Recommendation Endpoint ---
-@app.post("/recommendations/", response_model=ApiResponse)
-def get_recommendations(stock_levels: StockLevels):
-    """Takes current stock levels and returns AI-driven recommendations."""
+# --- Recommendation Endpoint (Now processes one category at a time) ---
+@app.post("/recommendations/{category_name}", response_model=ApiResponse)
+def get_recommendations(category_name: str, stock_levels: StockLevels):
+    """
+    Takes current stock levels and a single category name,
+    then returns AI-driven recommendations.
+    """
     if not hasattr(app.state, 'optimizer') or app.state.optimizer is None:
         raise HTTPException(status_code=503, detail="Optimizer is not ready.")
 
     try:
-        inventory_recs = app.state.optimizer.generate_inventory_recommendations(stock_levels.current_stock)
-        logistics_alerts = app.state.optimizer.generate_logistics_alerts()
+        # Pass the specific category_name to the functions
+        inventory_recs = app.state.optimizer.generate_inventory_recommendations(
+            stock_levels.current_stock,
+            category_name
+        )
+        logistics_alerts = app.state.optimizer.generate_logistics_alerts_for_category(
+            category_name
+        )
 
         return {
             "inventory_recommendations": inventory_recs,
             "strategic_alerts": logistics_alerts
         }
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Category '{category_name}' not found.")
     except Exception as e:
+        logger.error(f"Error processing '{category_name}': {e}")
         raise HTTPException(status_code=500, detail=f"An internal error occurred: {str(e)}")
 
 
