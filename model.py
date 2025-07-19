@@ -19,23 +19,20 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 def sanitize_for_mlflow(name: str) -> str:
-    """
-    Removes characters from a string that are invalid for MLflow keys or filenames.
-    """
+    """Removes characters from a string that are invalid for MLflow keys or filenames."""
     sanitized_name = name.replace('/', '_')
     return re.sub(r"[^a-zA-Z0-9_.\s:-]", "", sanitized_name)
 
 class SupplyChainOptimizer:
-    """
-    An AI agent that forecasts demand and optimizes inventory for a supply chain.
-    """
-    def __init__(self, preprocessed_data_url: str, models_dir: str = "saved_models"):
-        """Initializes the optimizer with the URL to the clean data."""
-        self.preprocessed_data_url = preprocessed_data_url
+    """An AI agent that forecasts demand and optimizes inventory for a supply chain."""
+    
+    def __init__(self, data_source_path_or_url: str, models_dir: str = "saved_models"):
+        """Initializes the optimizer with the path or URL to the raw data."""
+        self.data_source = data_source_path_or_url
         self.models_dir = Path(models_dir)
-        self.data: pd.DataFrame = None
+        self.data: pd.DataFrame = None # This will hold the original, rich data
         self.demand_models: Dict[str, Prophet] = {}
-        self.category_demands: Dict[str, pd.DataFrame] = {}
+        self.category_demands: Dict[str, pd.DataFrame] = {} # This will hold the aggregated data for Prophet
         self.category_stats: pd.DataFrame = None
         self.shipping_mode_stats: pd.DataFrame = None
         self.final_metrics: Dict[str, Dict[str, Any]] = {}
@@ -43,15 +40,17 @@ class SupplyChainOptimizer:
 
     def load_preprocessed_data(self) -> bool:
         """
-        Loads the preprocessed data from a URL and prepares it for modeling.
+        Loads the raw, preprocessed data, calculates necessary stats,
+        and aggregates it in memory for Prophet.
         """
-        logger.info(f"Loading preprocessed data from URL...")
+        logger.info(f"Loading preprocessed data from: {self.data_source}")
         try:
-            self.data = pd.read_csv(self.preprocessed_data_url, parse_dates=['order_date'])
+            self.data = pd.read_csv(self.data_source, parse_dates=['order_date'])
         except Exception as e:
-            logger.error(f"Failed to load data from URL: {self.preprocessed_data_url}. Error: {e}")
+            logger.error(f"Failed to load data from {self.data_source}. Error: {e}")
             return False
 
+        # --- View 1: Calculate Business Statistics from Raw Data ---
         self.category_stats = self.data.groupby('category_name').agg(
             order_quantity=('order_quantity', 'sum'),
             avg_unit_price=('order_total', 'sum'),
@@ -64,12 +63,13 @@ class SupplyChainOptimizer:
             late_delivery_risk=('late_delivery_risk', 'mean')
         ).reset_index()
 
-        for category in self.data['category_name'].unique():
-            category_data = self.data[self.data['category_name'] == category]
-            daily_agg = category_data.groupby('order_date').agg(
-                y=('order_quantity', 'sum')
-            ).reset_index().rename(columns={'order_date': 'ds'})
-            self.category_demands[category] = daily_agg
+        # --- View 2: Aggregate Data in Memory for Prophet ---
+        df_agg = self.data.copy()
+        df_agg['ds'] = df_agg['order_date'].dt.normalize()
+        daily_totals = df_agg.groupby(['category_name', 'ds']).agg(y=('order_quantity', 'sum')).reset_index()
+
+        for category in daily_totals['category_name'].unique():
+            self.category_demands[category] = daily_totals[daily_totals['category_name'] == category][['ds', 'y']]
         
         logger.info(f"Data loaded and prepared for {len(self.category_demands)} categories.")
         return True
@@ -88,41 +88,22 @@ class SupplyChainOptimizer:
         return np.sqrt(np.mean((val_actual - val_predictions) ** 2))
 
     def train_all_forecast_models(self, validation_days: int = 30, n_trials: int = 5) -> None:
-        """
-        Trains a Prophet model for each category with hyperparameter tuning.
-        """
+        """Trains a Prophet model for each category using the in-memory aggregated data."""
         logger.info("Training demand forecast models for all categories...")
-        with mlflow.start_run(run_name="Category_Demand_Forecast_Training"):
-            mlflow.log_param("validation_days", validation_days)
-            mlflow.log_param("optuna_trials", n_trials)
-
-            for category, daily_demand in self.category_demands.items():
-                if len(daily_demand) < validation_days * 2:
-                    logger.warning(f"Skipping category '{category}': not enough data for training and validation.")
-                    continue
-                
-                logger.info(f"Training model for category: '{category}'")
-                train_data, val_data = daily_demand.iloc[:-validation_days], daily_demand.iloc[-validation_days:]
-
-                study = optuna.create_study(direction="minimize")
-                study.optimize(lambda trial: self._objective(trial, train_data, val_data), n_trials=n_trials)
-                
-                best_params = study.best_params
-                sanitized_category = sanitize_for_mlflow(category)
-                mlflow.log_params({f"{sanitized_category}_best_{k}": v for k, v in best_params.items()})
-                
-                final_model = Prophet(**best_params).fit(daily_demand)
-                self.demand_models[category] = final_model
-                
-                future = final_model.make_future_dataframe(periods=validation_days)
-                forecast = final_model.predict(future)
-                val_predictions = forecast.iloc[-validation_days:]['yhat'].values
-                val_actual = val_data['y'].values
-                final_rmse = np.sqrt(np.mean((val_actual - val_predictions) ** 2))
-                
-                self.final_metrics[category] = {"rmse": final_rmse, "best_params": best_params}
-                mlflow.log_metric(f"{sanitized_category}_final_rmse", final_rmse)
-                logger.info(f"Model for '{category}' trained. Final RMSE: {final_rmse:.2f}")
+        for category, daily_demand in self.category_demands.items():
+            if len(daily_demand) < validation_days * 2:
+                logger.warning(f"Skipping category '{category}': not enough data for training and validation.")
+                continue
+            
+            logger.info(f"Training model for category: '{category}'")
+            train_data, val_data = daily_demand.iloc[:-validation_days], daily_demand.iloc[-validation_days:]
+            study = optuna.create_study(direction="minimize")
+            study.optimize(lambda trial: self._objective(trial, train_data, val_data), n_trials=n_trials)
+            best_params = study.best_params
+            
+            final_model = Prophet(**best_params).fit(daily_demand)
+            self.demand_models[category] = final_model
+            logger.info(f"Model for '{category}' trained.")
 
     def save_models(self):
         """Saves all trained Prophet models to pickle files."""
@@ -140,7 +121,10 @@ class SupplyChainOptimizer:
             logger.error(f"Models directory not found: {self.models_dir}")
             return
         logger.info(f"Loading models from directory: {self.models_dir}")
-        all_categories = list(self.category_demands.keys())
+        all_categories = []
+        if self.data is not None:
+             all_categories = self.data['category_name'].unique()
+
         for model_file in self.models_dir.glob("model_*.pkl"):
             with open(model_file, 'rb') as f:
                 model = pickle.load(f)
@@ -153,21 +137,15 @@ class SupplyChainOptimizer:
     def get_processed_recommendations(
         self, current_stock: Dict[str, float], category_name: str, forecast_days: int
     ) -> Tuple[List[str], List[str], Optional[Dict]]:
-        """
-        Generates recommendations and returns a fully processed dictionary for the API.
-        """
+        """Generates recommendations and returns a fully processed dictionary for the API."""
         logger.info(f"Generating probabilistic forecast for '{category_name}'...")
         model = self.demand_models.get(category_name)
         if not model:
-            logger.warning(f"No demand model found for '{category_name}'.")
             return [f"No model available for category '{category_name}'."], [], None
 
         future_df = model.make_future_dataframe(periods=forecast_days)
         forecast_df = model.predict(future_df)
-
-        inventory_recs = self._generate_inventory_text(
-            current_stock, category_name, forecast_df
-        )
+        inventory_recs = self._generate_inventory_text(current_stock, category_name, forecast_df)
         logistics_alerts = self.generate_logistics_alerts_for_category(category_name)
 
         formatted_forecast = {
@@ -199,20 +177,17 @@ class SupplyChainOptimizer:
         
         recommendations = []
         if current_stock.get(category_name, 0) < reorder_point:
-            rec_text = (
+            recommendations.append(
                 f"REORDER ALERT for '{category_name}': "
                 f"Current stock ({current_stock.get(category_name, 0):.0f}) is below reorder point ({reorder_point:.0f}). "
                 f"Recommended order quantity (EOQ): {economic_order_quantity:.0f} units."
             )
-            recommendations.append(rec_text)
-            
         if not recommendations:
             recommendations.append(f"Stock level for '{category_name}' is sufficient.")
         return recommendations
 
     def generate_logistics_alerts_for_category(self, category_name: str, high_cost_threshold: float = 150.0) -> List[str]:
         """Generates strategic alerts for a single category."""
-        logger.info(f"Generating strategic logistics alerts for '{category_name}'...")
         alerts = []
         try:
             stats = self.category_stats.loc[category_name]
@@ -226,7 +201,6 @@ class SupplyChainOptimizer:
                         f"STRATEGIC ALERT for '{category_name}': High late delivery risk detected ({stats['late_delivery_risk']:.1%}). "
                         f"To reduce risk, consider switching to '{best_mode['shipping_mode']}', which has a historical risk of only {best_mode['late_delivery_risk']:.1%}."
                     )
-            
             if stats['avg_unit_price'] > high_cost_threshold:
                 alerts.append(
                     f"COST ALERT for '{category_name}': High average unit price (${stats['avg_unit_price']:.2f}) indicates high holding costs. "
@@ -234,43 +208,24 @@ class SupplyChainOptimizer:
                 )
         except KeyError:
             logger.warning(f"Could not generate logistics alerts for '{category_name}'. Stats not found.")
-        
         return alerts
 
-def main() -> SupplyChainOptimizer:
+def main() -> Optional[SupplyChainOptimizer]:
     """
-    Main function to run the full optimization pipeline.
+    Main function to run the full optimization pipeline locally.
     """
-    optimizer = SupplyChainOptimizer("preprocessed_supply_chain_data.csv")
+    # For local training, use your original rich data file. The class will handle aggregation.
+    optimizer = SupplyChainOptimizer(data_source_path_or_url="preprocessed_supply_chain_data.csv")
+    
     if not optimizer.load_preprocessed_data():
         return None
-    optimizer.train_all_forecast_models(n_trials=5) 
     
-    current_stock = {
-        'Sporting Goods': 15000.0, 'Cleats': 25000.0, "Women's Apparel": 40000.0,
-        "Men's Footwear": 10000.0, "Camping & Hiking": 500.0, "Accessories": 10.0,
-        "Golf Gloves": 5.0, 'Indoor/Outdoor Games': 8000.0, 'Shop By Sport': 12000.0,
-        'Fishing': 3000.0, 'Cardio Equipment': 20.0, 'Water Sports': 4000.0,
-        'Electronics': 9000.0, 'Girls\' Apparel': 18000.0, 'Golf Balls': 5000.0
-    }
+    optimizer.train_all_forecast_models(n_trials=5)
     
-    inventory_recommendations, logistics_alerts, _ = optimizer.get_processed_recommendations(
-        current_stock, 'Sporting Goods', 30
-    )
-    
-    print("\n--- Inventory Recommendations ---")
-    for rec in inventory_recommendations:
-        print(f"- {rec}")
-    print("\n--- Strategic Alerts ---")
-    if logistics_alerts:
-        for alert in logistics_alerts:
-            print(f"- {alert}")
-    else:
-        print("- No strategic alerts at this time.")
+    if optimizer.demand_models:
+        logger.info("\n--- Post-Training Task ---")
+        optimizer.save_models()
     return optimizer
 
 if __name__ == "__main__":
     trained_optimizer = main()
-    if trained_optimizer:
-        logger.info("\n--- Post-Training Task ---")
-        trained_optimizer.save_models()
