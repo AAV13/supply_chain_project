@@ -150,30 +150,33 @@ class SupplyChainOptimizer:
                 self.demand_models[original_category] = model
                 logger.info(f"Loaded model for '{original_category}' from {model_file}")
 
-    def generate_recommendations_and_forecast(
+    def get_processed_recommendations(
         self, current_stock: Dict[str, float], category_name: str, forecast_days: int
-    ) -> Tuple[List[str], List[str], Optional[pd.DataFrame]]:
-        """Generates recommendations and returns the raw forecast DataFrame."""
+    ) -> Tuple[List[str], List[str], Optional[Dict]]:
+        """
+        Generates recommendations and returns a fully processed dictionary for the API.
+        """
         logger.info(f"Generating probabilistic forecast for '{category_name}'...")
         model = self.demand_models.get(category_name)
         if not model:
             logger.warning(f"No demand model found for '{category_name}'.")
             return [f"No model available for category '{category_name}'."], [], None
 
-        #1. Generate the future dates
         future_df = model.make_future_dataframe(periods=forecast_days)
-        #2. Run the prediction
         forecast_df = model.predict(future_df)
-        #3. Overwrite the potentially corrupted 'ds' column with our original, correct dates.
-        forecast_df['ds'] = future_df['ds']
-        #4. Generate text recommendations using the corrected forecast
+
         inventory_recs = self._generate_inventory_text(
             current_stock, category_name, forecast_df
         )
-        #5. Generate logistics alerts
         logistics_alerts = self.generate_logistics_alerts_for_category(category_name)
-        #6. Return everything, including the forecast DataFrame with correct dates
-        return inventory_recs, logistics_alerts, forecast_df[['ds', 'yhat', 'yhat_lower', 'yhat_upper']]
+
+        formatted_forecast = {
+            "dates": [d.strftime('%Y-%m-%d') for d in future_df['ds']],
+            "forecast_yhat": forecast_df['yhat'].tolist(),
+            "forecast_yhat_lower": forecast_df['yhat_lower'].tolist(),
+            "forecast_yhat_upper": forecast_df['yhat_upper'].tolist()
+        }
+        return inventory_recs, logistics_alerts, formatted_forecast
 
     def _generate_inventory_text(
         self, current_stock: Dict[str, float], category_name: str, forecast_df: pd.DataFrame, 
@@ -251,7 +254,7 @@ def main() -> SupplyChainOptimizer:
         'Electronics': 9000.0, 'Girls\' Apparel': 18000.0, 'Golf Balls': 5000.0
     }
     
-    inventory_recommendations, logistics_alerts, _ = optimizer.generate_recommendations_and_forecast(
+    inventory_recommendations, logistics_alerts, _ = optimizer.get_processed_recommendations(
         current_stock, 'Sporting Goods', 30
     )
     
