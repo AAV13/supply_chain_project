@@ -13,25 +13,30 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 
-# --- Lifespan Manager ---
+# --- Lifespan Manager (Runs on Server Startup) ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialize the SupplyChainOptimizer and load models on startup."""
+    """
+    Initializes the SupplyChainOptimizer and loads all data and models on startup.
+    """
     logger.info("Server is starting up...")
 
+    # The public URL to your original, rich dataset in GitHub Releases
     DATA_URL = "https://github.com/AAV13/supply_chain_project/releases/download/v1.0.0/preprocessed_supply_chain_data.csv"
     
-    app.state.optimizer = SupplyChainOptimizer(preprocessed_data_url=DATA_URL)
+    # Initialize the optimizer with the URL. It will handle all data processing internally.
+    app.state.optimizer = SupplyChainOptimizer(data_source_path_or_url=DATA_URL)
 
+    # Load the raw data and the pre-trained models
     if not app.state.optimizer.load_preprocessed_data():
-        raise RuntimeError("Failed to load preprocessed data.")
+        raise RuntimeError("Fatal: Failed to load and process data on startup.")
 
     app.state.optimizer.load_models()
 
     if not app.state.optimizer.demand_models:
-        raise RuntimeError("No models were loaded.")
+        raise RuntimeError("Fatal: No models were loaded on startup.")
 
-    logger.info("Models loaded and API is ready.")
+    logger.info("Models and data loaded successfully. API is ready.")
     yield
     logger.info("Server is shutting down.")
 
@@ -40,12 +45,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     lifespan=lifespan,
     title="Supply Chain API (Probabilistic)",
-    description="An API to get demand forecasts (including uncertainty) and inventory recommendations.",
-    version="2.1.0" # Version bump
+    description="An API to get demand forecasts, inventory recommendations, and logistics alerts.",
+    version="3.0.0"
 )
 
 
-# --- Request/Response Models ---
+# --- API Request/Response Models ---
 class StockLevels(BaseModel):
     current_stock: Dict[str, float] = Field(..., example={'Fishing': 3000.0, 'Cleats': 25000.0})
 
@@ -61,18 +66,17 @@ class ApiResponse(BaseModel):
     probabilistic_forecast: Optional[ForecastData] = None
 
 
-# --- Recommendation Endpoint ---
+# --- API Endpoints ---
 @app.post("/recommendations/{category_name}", response_model=ApiResponse)
 def get_recommendations(category_name: str, stock_levels: StockLevels):
     """
-    Takes stock levels and a category, then returns recommendations
+    Takes current stock levels and a category, then returns recommendations
     and the probabilistic forecast data.
     """
     if not hasattr(app.state, 'optimizer') or app.state.optimizer is None:
         raise HTTPException(status_code=503, detail="Optimizer is not ready.")
 
     try:
-        # Get the fully processed output from the optimizer
         recs, alerts, forecast_dict = app.state.optimizer.get_processed_recommendations(
             current_stock=stock_levels.current_stock,
             category_name=category_name,
@@ -91,7 +95,6 @@ def get_recommendations(category_name: str, stock_levels: StockLevels):
         raise HTTPException(status_code=500, detail=f"An internal error occurred: {str(e)}")
 
 
-# --- Health Check Endpoint ---
 @app.get("/")
 def read_root():
     return {"status": "Supply Chain Optimization project is running."}
