@@ -1,11 +1,11 @@
 setuptools==68.2.2
 wheel==0.41.2
-pandas==1.5.3
+pandas==2.2.2
 numpy==2.0.2
-prophet==1.1.5
+prophet==1.1.7
 mlflow
 optuna
-scikit-learn==1.2.2
+scikit-learn==1.6.1
 fastapi
 uvicorn[standard]
 gunicorn
