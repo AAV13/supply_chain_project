@@ -41,7 +41,7 @@ app = FastAPI(
     lifespan=lifespan,
     title="Supply Chain API (Probabilistic)",
     description="An API to get demand forecasts (including uncertainty) and inventory recommendations.",
-    version="2.0.0"
+    version="2.1.0" # Version bump
 )
 
 
@@ -49,21 +49,19 @@ app = FastAPI(
 class StockLevels(BaseModel):
     current_stock: Dict[str, float] = Field(..., example={'Fishing': 3000.0, 'Cleats': 25000.0})
 
-# NEW: A model to hold the detailed forecast data
 class ForecastData(BaseModel):
     dates: List[str]
     forecast_yhat: List[float]
     forecast_yhat_lower: List[float]
     forecast_yhat_upper: List[float]
 
-# UPDATED: The main response now includes the optional forecast data
 class ApiResponse(BaseModel):
     inventory_recommendations: List[str]
     strategic_alerts: List[str]
     probabilistic_forecast: Optional[ForecastData] = None
 
 
-# --- Recommendation Endpoint (Now returns probabilistic data) ---
+# --- Recommendation Endpoint ---
 @app.post("/recommendations/{category_name}", response_model=ApiResponse)
 def get_recommendations(category_name: str, stock_levels: StockLevels):
     """
@@ -74,27 +72,17 @@ def get_recommendations(category_name: str, stock_levels: StockLevels):
         raise HTTPException(status_code=503, detail="Optimizer is not ready.")
 
     try:
-        # Get the full output from the optimizer
-        recs, alerts, forecast_df = app.state.optimizer.generate_recommendations_and_forecast(
+        # Get the fully processed output from the optimizer
+        recs, alerts, forecast_dict = app.state.optimizer.get_processed_recommendations(
             current_stock=stock_levels.current_stock,
             category_name=category_name,
-            forecast_days=30 # We want a 30-day forecast
+            forecast_days=30
         )
-
-        # Structure the forecast data for the API response
-        forecast_data = None
-        if forecast_df is not None and not forecast_df.empty:
-            forecast_data = ForecastData(
-                dates=[d.strftime('%Y-%m-%d') for d in forecast_df['ds']],
-                forecast_yhat=forecast_df['yhat'].tolist(),
-                forecast_yhat_lower=forecast_df['yhat_lower'].tolist(),
-                forecast_yhat_upper=forecast_df['yhat_upper'].tolist()
-            )
-
+        
         return ApiResponse(
             inventory_recommendations=recs,
             strategic_alerts=alerts,
-            probabilistic_forecast=forecast_data
+            probabilistic_forecast=forecast_dict
         )
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Category '{category_name}' not found.")
