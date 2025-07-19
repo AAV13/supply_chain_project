@@ -35,7 +35,7 @@ The entire system is deployed as a robust FastAPI web service, making these insi
 * **MLOps**: MLflow
 * **Data Handling**: Pandas, NumPy
 * **Web Server**: Uvicorn, Gunicorn
-* **Deployment**: Render
+* **Deployment**: Railway, and also tried Render
 
 ## Project Structure
 
