@@ -1,7 +1,7 @@
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
-from typing import Dict, List
+from typing import Dict, List, Optional
 from contextlib import asynccontextmanager
 import logging
 
@@ -19,7 +19,6 @@ async def lifespan(app: FastAPI):
     """Initialize the SupplyChainOptimizer and load models on startup."""
     logger.info("Server is starting up...")
 
-    # The correct, permanent URL to your data file
     DATA_URL = "https://github.com/AAV13/supply_chain_project/releases/download/v1.0.0/preprocessed_supply_chain_data.csv"
     
     app.state.optimizer = SupplyChainOptimizer(preprocessed_data_url=DATA_URL)
@@ -40,54 +39,63 @@ async def lifespan(app: FastAPI):
 # --- Initialize FastAPI App ---
 app = FastAPI(
     lifespan=lifespan,
-    title="Supply Chain API",
-    description="An API to get demand forecasts and inventory recommendations for a specific category.",
-    version="1.1.0"
+    title="Supply Chain API (Probabilistic)",
+    description="An API to get demand forecasts (including uncertainty) and inventory recommendations.",
+    version="2.0.0"
 )
 
 
 # --- Request/Response Models ---
 class StockLevels(BaseModel):
-    current_stock: Dict[str, float] = Field(
-        ..., 
-        example={
-            'Accessories': 10.0, 'Camping & Hiking': 500.0, 'Cardio Equipment': 20.0,
-            'Cleats': 25000.0, 'Electronics': 9000.0, 'Fishing': 3000.0,
-            "Girls' Apparel": 18000.0, 'Golf Balls': 5000.0, 'Golf Gloves': 5.0,
-            'Indoor/Outdoor Games': 8000.0, "Men's Footwear": 10000.0, 'Shop By Sport': 12000.0,
-            'Sporting Goods': 15000.0, 'Water Sports': 4000.0, "Women's Apparel": 40000.0
-        }
-    )
+    current_stock: Dict[str, float] = Field(..., example={'Fishing': 3000.0, 'Cleats': 25000.0})
 
+# NEW: A model to hold the detailed forecast data
+class ForecastData(BaseModel):
+    dates: List[str]
+    forecast_yhat: List[float]
+    forecast_yhat_lower: List[float]
+    forecast_yhat_upper: List[float]
+
+# UPDATED: The main response now includes the optional forecast data
 class ApiResponse(BaseModel):
     inventory_recommendations: List[str]
     strategic_alerts: List[str]
+    probabilistic_forecast: Optional[ForecastData] = None
 
 
-# --- Recommendation Endpoint (Now processes one category at a time) ---
+# --- Recommendation Endpoint (Now returns probabilistic data) ---
 @app.post("/recommendations/{category_name}", response_model=ApiResponse)
 def get_recommendations(category_name: str, stock_levels: StockLevels):
     """
-    Takes current stock levels and a single category name,
-    then returns AI-driven recommendations.
+    Takes stock levels and a category, then returns recommendations
+    and the probabilistic forecast data.
     """
     if not hasattr(app.state, 'optimizer') or app.state.optimizer is None:
         raise HTTPException(status_code=503, detail="Optimizer is not ready.")
 
     try:
-        # Pass the specific category_name to the functions
-        inventory_recs = app.state.optimizer.generate_inventory_recommendations(
-            stock_levels.current_stock,
-            category_name
-        )
-        logistics_alerts = app.state.optimizer.generate_logistics_alerts_for_category(
-            category_name
+        # Get the full output from the optimizer
+        recs, alerts, forecast_df = app.state.optimizer.generate_recommendations_and_forecast(
+            current_stock=stock_levels.current_stock,
+            category_name=category_name,
+            forecast_days=30 # We want a 30-day forecast
         )
 
-        return {
-            "inventory_recommendations": inventory_recs,
-            "strategic_alerts": logistics_alerts
-        }
+        # Structure the forecast data for the API response
+        forecast_data = None
+        if forecast_df is not None and not forecast_df.empty:
+            forecast_data = ForecastData(
+                dates=[d.strftime('%Y-%m-%d') for d in forecast_df['ds']],
+                forecast_yhat=forecast_df['yhat'].tolist(),
+                forecast_yhat_lower=forecast_df['yhat_lower'].tolist(),
+                forecast_yhat_upper=forecast_df['yhat_upper'].tolist()
+            )
+
+        return ApiResponse(
+            inventory_recommendations=recs,
+            strategic_alerts=alerts,
+            probabilistic_forecast=forecast_data
+        )
     except KeyError:
         raise HTTPException(status_code=404, detail=f"Category '{category_name}' not found.")
     except Exception as e:
@@ -99,7 +107,3 @@ def get_recommendations(category_name: str, stock_levels: StockLevels):
 @app.get("/")
 def read_root():
     return {"status": "Supply Chain Optimization project is running."}
-
-
-# --- Run Command ---
-# Run with: uvicorn main:app --reload
