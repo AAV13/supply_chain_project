@@ -3,7 +3,7 @@ import numpy as np
 from prophet import Prophet
 import mlflow
 import optuna
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Tuple, Optional
 import logging
 import warnings
 import re
@@ -19,11 +19,18 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 def sanitize_for_mlflow(name: str) -> str:
+    """
+    Removes characters from a string that are invalid for MLflow keys or filenames.
+    """
     sanitized_name = name.replace('/', '_')
     return re.sub(r"[^a-zA-Z0-9_.\s:-]", "", sanitized_name)
 
 class SupplyChainOptimizer:
+    """
+    An AI agent that forecasts demand and optimizes inventory for a supply chain.
+    """
     def __init__(self, preprocessed_data_url: str, models_dir: str = "saved_models"):
+        """Initializes the optimizer with the URL to the clean data."""
         self.preprocessed_data_url = preprocessed_data_url
         self.models_dir = Path(models_dir)
         self.data: pd.DataFrame = None
@@ -35,6 +42,9 @@ class SupplyChainOptimizer:
         self.models_dir.mkdir(exist_ok=True)
 
     def load_preprocessed_data(self) -> bool:
+        """
+        Loads the preprocessed data from a URL and prepares it for modeling.
+        """
         logger.info(f"Loading preprocessed data from URL...")
         try:
             self.data = pd.read_csv(self.preprocessed_data_url, parse_dates=['order_date'])
@@ -65,6 +75,7 @@ class SupplyChainOptimizer:
         return True
 
     def _objective(self, trial: optuna.Trial, train_data: pd.DataFrame, val_data: pd.DataFrame) -> float:
+        """Objective function for Optuna hyperparameter optimization."""
         params = {
             'changepoint_prior_scale': trial.suggest_float('changepoint_prior_scale', 0.001, 0.5, log=True),
             'seasonality_prior_scale': trial.suggest_float('seasonality_prior_scale', 0.01, 10, log=True),
@@ -77,16 +88,54 @@ class SupplyChainOptimizer:
         return np.sqrt(np.mean((val_actual - val_predictions) ** 2))
 
     def train_all_forecast_models(self, validation_days: int = 30, n_trials: int = 5) -> None:
+        """
+        Trains a Prophet model for each category with hyperparameter tuning.
+        """
         logger.info("Training demand forecast models for all categories...")
-        # ... (This function remains unchanged as it's for local training)
-        pass # Pass to keep the code brief, logic is the same as your original
+        with mlflow.start_run(run_name="Category_Demand_Forecast_Training"):
+            mlflow.log_param("validation_days", validation_days)
+            mlflow.log_param("optuna_trials", n_trials)
+
+            for category, daily_demand in self.category_demands.items():
+                if len(daily_demand) < validation_days * 2:
+                    logger.warning(f"Skipping category '{category}': not enough data for training and validation.")
+                    continue
+                
+                logger.info(f"Training model for category: '{category}'")
+                train_data, val_data = daily_demand.iloc[:-validation_days], daily_demand.iloc[-validation_days:]
+
+                study = optuna.create_study(direction="minimize")
+                study.optimize(lambda trial: self._objective(trial, train_data, val_data), n_trials=n_trials)
+                
+                best_params = study.best_params
+                sanitized_category = sanitize_for_mlflow(category)
+                mlflow.log_params({f"{sanitized_category}_best_{k}": v for k, v in best_params.items()})
+                
+                final_model = Prophet(**best_params).fit(daily_demand)
+                self.demand_models[category] = final_model
+                
+                future = final_model.make_future_dataframe(periods=validation_days)
+                forecast = final_model.predict(future)
+                val_predictions = forecast.iloc[-validation_days:]['yhat'].values
+                val_actual = val_data['y'].values
+                final_rmse = np.sqrt(np.mean((val_actual - val_predictions) ** 2))
+                
+                self.final_metrics[category] = {"rmse": final_rmse, "best_params": best_params}
+                mlflow.log_metric(f"{sanitized_category}_final_rmse", final_rmse)
+                logger.info(f"Model for '{category}' trained. Final RMSE: {final_rmse:.2f}")
 
     def save_models(self):
+        """Saves all trained Prophet models to pickle files."""
         logger.info(f"Saving models to directory: {self.models_dir}")
-        # ... (This function remains unchanged)
-        pass # Pass to keep the code brief, logic is the same as your original
+        for category, model in self.demand_models.items():
+            sanitized_category = sanitize_for_mlflow(category)
+            model_path = self.models_dir / f"model_{sanitized_category}.pkl"
+            with open(model_path, 'wb') as f:
+                pickle.dump(model, f)
+            logger.info(f"Saved model for '{category}' to {model_path}")
 
     def load_models(self):
+        """Loads Prophet models from pickle files."""
         if not self.models_dir.exists():
             logger.error(f"Models directory not found: {self.models_dir}")
             return
@@ -100,32 +149,49 @@ class SupplyChainOptimizer:
             if original_category:
                 self.demand_models[original_category] = model
                 logger.info(f"Loaded model for '{original_category}' from {model_file}")
-
-    def generate_inventory_recommendations(self, current_stock: Dict[str, float], category_name: str, lead_time_days: int = 5, service_level: float = 0.95, ordering_cost: float = 50, holding_cost_rate: float = 0.2) -> List[str]:
-        """Generates inventory reorder recommendations for a single category."""
-        logger.info(f"Generating inventory recommendations for '{category_name}'...")
+    
+    def generate_recommendations_and_forecast(
+        self, current_stock: Dict[str, float], category_name: str, forecast_days: int
+    ) -> Tuple[List[str], List[str], Optional[pd.DataFrame]]:
+        """
+        Generates recommendations and returns the raw forecast DataFrame.
+        """
+        logger.info(f"Generating probabilistic forecast for '{category_name}'...")
         model = self.demand_models.get(category_name)
         if not model:
             logger.warning(f"No demand model found for '{category_name}'.")
-            return [f"No model available for category '{category_name}'."]
+            return [f"No model available for category '{category_name}'."], [], None
 
-        recommendations = []
-        future = model.make_future_dataframe(periods=lead_time_days)
-        forecast = model.predict(future)
-        
-        avg_daily_demand = forecast.iloc[-lead_time_days:]['yhat'].mean()
-        std_dev_demand = forecast.iloc[-lead_time_days:]['yhat'].std()
+        future_df = model.make_future_dataframe(periods=forecast_days)
+        forecast_df = model.predict(future_df)
+
+        inventory_recs = self._generate_inventory_text(
+            current_stock, category_name, forecast_df
+        )
+        logistics_alerts = self.generate_logistics_alerts_for_category(category_name)
+
+        return inventory_recs, logistics_alerts, forecast_df[['ds', 'yhat', 'yhat_lower', 'yhat_upper']]
+
+    def _generate_inventory_text(
+        self, current_stock: Dict[str, float], category_name: str, forecast_df: pd.DataFrame, 
+        lead_time_days: int = 5, service_level: float = 0.95, ordering_cost: float = 50, holding_cost_rate: float = 0.2
+    ) -> List[str]:
+        """Generates inventory reorder text based on a pre-computed forecast."""
+        lead_time_forecast = forecast_df.iloc[-lead_time_days:]
+        avg_daily_demand = lead_time_forecast['yhat'].mean()
+        std_dev_demand = (lead_time_forecast['yhat_upper'] - lead_time_forecast['yhat_lower']).mean()
         
         z_score = {0.95: 1.645}.get(service_level, 1.645)
         safety_stock = z_score * std_dev_demand * np.sqrt(lead_time_days)
         reorder_point = (avg_daily_demand * lead_time_days) + safety_stock
         
-        annual_demand = avg_daily_demand * 365
+        annual_demand = forecast_df['yhat'].iloc[-365:].mean() * 365
         avg_unit_price = self.category_stats.loc[category_name, 'avg_unit_price']
         holding_cost = avg_unit_price * holding_cost_rate
         
         economic_order_quantity = np.sqrt((2 * ordering_cost * annual_demand) / holding_cost) if holding_cost > 0 else 0
         
+        recommendations = []
         if current_stock.get(category_name, 0) < reorder_point:
             rec_text = (
                 f"REORDER ALERT for '{category_name}': "
@@ -142,30 +208,63 @@ class SupplyChainOptimizer:
         """Generates strategic alerts for a single category."""
         logger.info(f"Generating strategic logistics alerts for '{category_name}'...")
         alerts = []
-        stats = self.category_stats.loc[category_name]
-        late_delivery_threshold = self.category_stats['late_delivery_risk'].quantile(0.75)
-        
-        if stats['late_delivery_risk'] > late_delivery_threshold:
-            category_shipping_perf = self.shipping_mode_stats[self.shipping_mode_stats['category_name'] == category_name]
-            if not category_shipping_perf.empty:
-                best_mode = category_shipping_perf.loc[category_shipping_perf['late_delivery_risk'].idxmin()]
+        try:
+            stats = self.category_stats.loc[category_name]
+            late_delivery_threshold = self.category_stats['late_delivery_risk'].quantile(0.75)
+            
+            if stats['late_delivery_risk'] > late_delivery_threshold:
+                category_shipping_perf = self.shipping_mode_stats[self.shipping_mode_stats['category_name'] == category_name]
+                if not category_shipping_perf.empty:
+                    best_mode = category_shipping_perf.loc[category_shipping_perf['late_delivery_risk'].idxmin()]
+                    alerts.append(
+                        f"STRATEGIC ALERT for '{category_name}': High late delivery risk detected ({stats['late_delivery_risk']:.1%}). "
+                        f"To reduce risk, consider switching to '{best_mode['shipping_mode']}', which has a historical risk of only {best_mode['late_delivery_risk']:.1%}."
+                    )
+            
+            if stats['avg_unit_price'] > high_cost_threshold:
                 alerts.append(
-                    f"STRATEGIC ALERT for '{category_name}': High late delivery risk detected ({stats['late_delivery_risk']:.1%}). "
-                    f"To reduce risk, consider switching to '{best_mode['shipping_mode']}', which has a historical risk of only {best_mode['late_delivery_risk']:.1%}."
+                    f"COST ALERT for '{category_name}': High average unit price (${stats['avg_unit_price']:.2f}) indicates high holding costs. "
+                    f"Consider a leaner inventory policy."
                 )
-        
-        if stats['avg_unit_price'] > high_cost_threshold:
-            alerts.append(
-                f"COST ALERT for '{category_name}': High average unit price (${stats['avg_unit_price']:.2f}) indicates high holding costs. "
-                f"Consider a leaner inventory policy."
-            )
+        except KeyError:
+            logger.warning(f"Could not generate logistics alerts for '{category_name}'. Stats not found.")
         
         return alerts
 
-# The main function and if __name__ == "__main__" block are for local execution
-# and remain unchanged from your original file.
-def main():
-    pass
+def main() -> SupplyChainOptimizer:
+    """
+    Main function to run the full optimization pipeline.
+    """
+    optimizer = SupplyChainOptimizer("preprocessed_supply_chain_data.csv")
+    if not optimizer.load_preprocessed_data():
+        return None
+    optimizer.train_all_forecast_models(n_trials=5) 
+    
+    current_stock = {
+        'Sporting Goods': 15000.0, 'Cleats': 25000.0, "Women's Apparel": 40000.0,
+        "Men's Footwear": 10000.0, "Camping & Hiking": 500.0, "Accessories": 10.0,
+        "Golf Gloves": 5.0, 'Indoor/Outdoor Games': 8000.0, 'Shop By Sport': 12000.0,
+        'Fishing': 3000.0, 'Cardio Equipment': 20.0, 'Water Sports': 4000.0,
+        'Electronics': 9000.0, 'Girls\' Apparel': 18000.0, 'Golf Balls': 5000.0
+    }
+    
+    inventory_recommendations, logistics_alerts, _ = optimizer.generate_recommendations_and_forecast(
+        current_stock, 'Sporting Goods', 30
+    )
+    
+    print("\n--- Inventory Recommendations ---")
+    for rec in inventory_recommendations:
+        print(f"- {rec}")
+    print("\n--- Strategic Alerts ---")
+    if logistics_alerts:
+        for alert in logistics_alerts:
+            print(f"- {alert}")
+    else:
+        print("- No strategic alerts at this time.")
+    return optimizer
 
 if __name__ == "__main__":
-    pass
+    trained_optimizer = main()
+    if trained_optimizer:
+        logger.info("\n--- Post-Training Task ---")
+        trained_optimizer.save_models()
