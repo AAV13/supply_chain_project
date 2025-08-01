@@ -31,6 +31,7 @@ The project consists of two main components that work together: the FastAPI back
   
 <img width="956" height="427" alt="webpage expanded" src="https://github.com/user-attachments/assets/3757f553-db97-4b61-b70b-8060ee62e02f" />   
 
+
 2.  **n8n Workflow:**
     * **Trigger:** Runs automatically on a monthly schedule.
     * **Read Data:** Fetches all product rows from a designated Google Sheet with the inventory data.
@@ -40,6 +41,7 @@ The project consists of two main components that work together: the FastAPI back
     * **Update Sheet:** Writes the AI summary back into the correct row in the Google Sheet, closing the loop.
 
 <img width="788" height="239" alt="workflow" src="https://github.com/user-attachments/assets/82550ec4-9786-4053-92a3-94f7145f2718" />
+
 
 ## Tech Stack
 
