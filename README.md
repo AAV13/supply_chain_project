@@ -1,8 +1,45 @@
-# Predictive API for Supply Chain Optimization
+# AI-Powered Supply Chain Optimization & Automation
 
 ## Overview
+This project is a comprehensive, AI-driven solution for intelligent inventory management. It combines a **FastAPI-powered recommendation engine** with a sophisticated **n8n automation workflow** to provide real-time analysis, strategic alerts, and automated reporting directly within a Google Sheet.
 
-This project provides a RESTful API for forecasting product demand across various categories. It uses historical supply chain data to train individual Random Forest models for each product category and serves predictions through a FastAPI backend.
+The system analyzes inventory levels, predicts reorder points, provides strategic alerts about logistical risks, and uses a Large Language Model (Google Gemini) to deliver human-readable summaries and action plans.
+
+## ✨ Key Features
+
+* **RESTful API:** A robust API built with **FastAPI** that provides inventory recommendations and strategic alerts based on historical data.
+* **Automated Data Processing:** An **n8n workflow** runs on a schedule to automatically fetch data from a Google Sheet.
+* **Intelligent Analysis:** The system uses **Google Gemini** to interpret the raw API data and generate concise, actionable summaries.
+* **Proactive Email Alerts:** Automatically sends email notifications via **Gmail** for inventory items that require immediate action (e.g., reordering).
+* **Automated Reporting:** Updates the Google Sheet with the AI-generated summary for each item, creating a self-updating dashboard.
+* **Cloud Deployment:** The FastAPI application is deployed and accessible via **Railway**.
+
+The project consists of two main components that work together: the FastAPI backend and the n8n automation workflow.
+
+1.  **FastAPI Backend:**
+    * Accepts a product category and its current stock level.
+    * Analyzes the data to produce `inventory_recommendations` and `strategic_alerts`.
+    * Hosted on Railway for reliable, 24/7 access.
+
+2.  **n8n Workflow:**
+    * **Trigger:** Runs automatically on a daily schedule.
+    * **Read Data:** Fetches all product rows from a designated **Google Sheet**.
+    * **Call API:** For each product, it calls the FastAPI endpoint to get a recommendation.
+    * **AI Summarization:** Sends the API's JSON response to **Google Gemini** to generate a human-friendly summary.
+    * **Conditional Alerting:** An `IF` node checks if the summary contains "Action Required:". If true, it sends a detailed alert via **Gmail**.
+    * **Update Sheet:** Writes the AI summary back into the correct row in the Google Sheet, closing the loop.
+
+### 2. The n8n Workflow
+
+To replicate the automation, you would need to build the workflow as described in the architecture section. This involves:
+1.  Setting up a Google Sheet with your inventory data (`category_name`, `current_stock`, etc.).
+2.  Creating an n8n workflow with the required nodes (`Schedule Trigger`, `Google Sheets`, `Code`, `HTTP Request`, `Basic LLM Chain`, `IF`, `Gmail`).
+3.  Configuring credentials for Google Sheets, Google Gemini, and Gmail within n8n.
+4.  Using the expressions and logic developed in this project to connect the nodes and process the data.
+
+
+## Github Repository 
+This repository provides a RESTful API for forecasting product demand across various categories. It uses historical supply chain data to train individual Random Forest models for each product category and serves predictions through a FastAPI backend.
 
 This service is designed to be called by automation platforms like **n8n** to create a true, end-to-end AI agent that can make automated, data-driven decisions.
 
