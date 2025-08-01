@@ -5,14 +5,22 @@ This project is a comprehensive, AI-driven solution for intelligent inventory ma
 
 The system analyzes inventory levels, predicts reorder points, provides strategic alerts about logistical risks, and uses a Large Language Model (Google Gemini) to deliver human-readable summaries and action plans.
 
-## ✨ Key Features
+## Key Features
+### API & Forecasting Engine
+* **Multi-Model Demand Forecasting:** Trains a separate, specialized `Prophet` model for each product category.
+* **Hyperparameter Tuning:** Uses `Optuna` to automatically find the best model settings for each category, maximizing forecast accuracy.
+* **MLOps Experiment Tracking:** Integrates with `MLflow` to log all training parameters, metrics, and model artifacts for reproducibility.
+* **Intelligent Inventory Optimization:**
+    * Calculates a dynamic **Reorder Point (ROP)** to know *when* to order.
+    * Calculates the **Economic Order Quantity (EOQ)** to know *how much* to order cost-effectively.
+* **Strategic Logistics Insights:** Analyzes historical data to flag categories with high late delivery risk or excessive holding costs.
+* **API Deployment**: The entire system is wrapped in a `FastAPI` application, ready for production deployment.
 
-* **RESTful API:** A robust API built with **FastAPI** that provides inventory recommendations and strategic alerts based on historical data.
-* **Automated Data Processing:** An **n8n workflow** runs on a schedule to automatically fetch data from a Google Sheet.
-* **Intelligent Analysis:** The system uses **Google Gemini** to interpret the raw API data and generate concise, actionable summaries.
-* **Proactive Email Alerts:** Automatically sends email notifications via **Gmail** for inventory items that require immediate action (e.g., reordering).
-* **Automated Reporting:** Updates the Google Sheet with the AI-generated summary for each item, creating a self-updating dashboard.
-* **Cloud Deployment:** The FastAPI application is deployed and accessible via **Railway**.
+### n8n Automation Workflow
+* **Automated Data Processing:** Runs on a schedule to automatically process every item in a Google Sheet without manual intervention.
+* **Intelligent Analysis:** Leverages **Google Gemini** to translate complex JSON data into clear, actionable business insights.
+* **Proactive Email Alerts:** Automatically notifies stakeholders via **Gmail** about urgent inventory issues that require immediate attention.
+* **Automated Reporting:** Creates a "living" report by constantly updating the Google Sheet with the latest AI-generated summaries.
 
 The project consists of two main components that work together: the FastAPI backend and the n8n automation workflow.
 
@@ -20,25 +28,30 @@ The project consists of two main components that work together: the FastAPI back
     * Accepts a product category and its current stock level.
     * Analyzes the data to produce `inventory_recommendations` and `strategic_alerts`.
     * Hosted on Railway for reliable, 24/7 access.
+  
+<img width="956" height="427" alt="webpage expanded" src="https://github.com/user-attachments/assets/3757f553-db97-4b61-b70b-8060ee62e02f" />   
 
 2.  **n8n Workflow:**
-    * **Trigger:** Runs automatically on a daily schedule.
-    * **Read Data:** Fetches all product rows from a designated **Google Sheet**.
+    * **Trigger:** Runs automatically on a monthly schedule.
+    * **Read Data:** Fetches all product rows from a designated Google Sheet with the inventory data.
     * **Call API:** For each product, it calls the FastAPI endpoint to get a recommendation.
-    * **AI Summarization:** Sends the API's JSON response to **Google Gemini** to generate a human-friendly summary.
-    * **Conditional Alerting:** An `IF` node checks if the summary contains "Action Required:". If true, it sends a detailed alert via **Gmail**.
+    * **AI Summarization:** Sends the API's JSON response to and **LLM** (Google Gemini) to generate a human-friendly summary.
+    * **Conditional Alerting:** An `IF` node checks if the summary contains "Action Required:". These are urgent so, it sends a detailed alert via email.
     * **Update Sheet:** Writes the AI summary back into the correct row in the Google Sheet, closing the loop.
 
-### 2. The n8n Workflow
+<img width="788" height="239" alt="workflow" src="https://github.com/user-attachments/assets/82550ec4-9786-4053-92a3-94f7145f2718" />
 
-To replicate the automation, you would need to build the workflow as described in the architecture section. This involves:
-1.  Setting up a Google Sheet with your inventory data (`category_name`, `current_stock`, etc.).
-2.  Creating an n8n workflow with the required nodes (`Schedule Trigger`, `Google Sheets`, `Code`, `HTTP Request`, `Basic LLM Chain`, `IF`, `Gmail`).
-3.  Configuring credentials for Google Sheets, Google Gemini, and Gmail within n8n.
-4.  Using the expressions and logic developed in this project to connect the nodes and process the data.
+## Tech Stack
 
+* **Backend**: Python, FastAPI
+* **Forecasting**: Prophet (fbprophet)
+* **Hyperparameter Tuning**: Optuna, Scikit-learn
+* **MLOps**: MLflow
+* **Data Handling**: Pandas, NumPy
+* **Web Server**: Uvicorn, Gunicorn
+* **Deployment**: Railway, and also tried Render  
 
-## Github Repository 
+### Github Repository 
 This repository provides a RESTful API for forecasting product demand across various categories. It uses historical supply chain data to train individual Random Forest models for each product category and serves predictions through a FastAPI backend.
 
 This service is designed to be called by automation platforms like **n8n** to create a true, end-to-end AI agent that can make automated, data-driven decisions.
@@ -51,28 +64,6 @@ The API provides two types of insights:
 The primary goal of this project is to predict future product demand based on historical data points like sales, price, and stock levels. By training a separate regression model for each product category, the API can deliver tailored forecasts, which is essential for optimizing inventory, logistics, and overall supply chain efficiency. The application is built with FastAPI, ensuring high performance and automatic interactive documentation.
 
 The entire system is deployed as a robust FastAPI web service, making these insights available via a simple API call.
-
-## Features
-
-* **Automated Data Preprocessing**: A standalone script cleans, validates, and transforms raw transactional data into a model-ready format.
-* **Multi-Model Demand Forecasting**: Trains a separate, specialized `Prophet` model for each product category. The model is configured to automatically detect yearly and weekly seasonality with a multiplicative effect.
-* **Hyperparameter Tuning**: Uses `Optuna` to automatically find the best model settings for each category, maximizing forecast accuracy.
-* **MLOps Experiment Tracking**: Integrates with `MLflow` to log all training parameters, performance metrics, and model artifacts for reproducibility.
-* **Intelligent Inventory Optimization**:
-    * Calculates a dynamic **Reorder Point (ROP)** to know *when* to order.
-    * Calculates the **Economic Order Quantity (EOQ)** to know *how much* to order cost-effectively.
-* **Strategic Logistics Insights**: Analyzes historical data to flag categories with high late delivery risk or excessive holding costs.
-* **API Deployment**: The entire system is wrapped in a `FastAPI` application, ready for production deployment.
-
-## Tech Stack
-
-* **Backend**: Python, FastAPI
-* **Forecasting**: Prophet (fbprophet)
-* **Optimization**: Optuna, Scikit-learn
-* **MLOps**: MLflow
-* **Data Handling**: Pandas, NumPy
-* **Web Server**: Uvicorn, Gunicorn
-* **Deployment**: Railway, and also tried Render
 
 ## Project Structure
 
@@ -144,9 +135,36 @@ uvicorn main:app --reload
 ```
 
 ## API Usage
+Once the server is running, you can access the interactive API documentation (Swagger UI) in your browser at: http://127.0.0.1:8000/docs
 
-Once the server is running, you can access the interactive API documentation (Swagger UI) in your browser at:
+The production API is also live on Railway: https://www.google.com/search?q=https://supplychainproject-production.up.railway.app/docs
 
-[**http://127.0.0.1:8000/docs**](http://127.0.0.1:8000/docs)
+POST /recommendations/{category_name}
+Provides inventory and strategic analysis for a given product category.
 
-From this page, you can use the `/recommendations/` endpoint to get live inventory and strategic alerts by providing your current stock levels in a JSON format. This API is designed to be called by an automation tool like n8n to complete the AI agent workflow.
+URL Params:
+
+category_name (string, required): The URL-encoded name of the product category.
+
+Request Body:
+
+JSON
+
+{
+  "current_stock": {
+    "Category Name": 1234
+  }
+}
+Success Response (200):
+
+JSON
+
+{
+  "inventory_recommendations": [
+    "REORDER ALERT for 'Accessories': Current stock (45) is below reorder point (90). Recommended order quantity (EOQ): 247 units."
+  ],
+  "strategic_alerts": [
+    "STRATEGIC ALERT for 'Accessories': High late delivery risk detected (57.0%)..."
+  ],
+  "probabilistic_forecast": null
+}
