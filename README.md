@@ -53,6 +53,21 @@ The project consists of two main components that work together: the FastAPI back
 * **Web Server**: Uvicorn, Gunicorn
 * **Deployment**: Railway, and also tried Render  
 
+### OUTPUTS
+
+## Excel before:
+<img width="449" height="368" alt="before" src="https://github.com/user-attachments/assets/b6e4976c-f345-4632-b1f2-f037c0742b59" />
+
+## Excel after:
+<img width="443" height="367" alt="after" src="https://github.com/user-attachments/assets/d6c09d89-5810-4561-afba-e32324cd7ef0" />
+
+## EMAIL Alerts:
+
+<img width="661" height="223" alt="image" src="https://github.com/user-attachments/assets/c183e0c1-315a-4ab2-839e-f3f23827c2ef" />
+
+<img width="614" height="218" alt="image" src="https://github.com/user-attachments/assets/1427efd1-d982-4f03-9f61-20da4609e23e" />
+
+
 ### Github Repository 
 This repository provides a RESTful API for forecasting product demand across various categories. It uses historical supply chain data to train individual Random Forest models for each product category and serves predictions through a FastAPI backend.
 
