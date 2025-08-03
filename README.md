@@ -53,15 +53,15 @@ The project consists of two main components that work together: the FastAPI back
 * **Web Server**: Uvicorn, Gunicorn
 * **Deployment**: Railway, and also tried Render  
 
-### OUTPUTS
+# OUTPUTS
 
-## Excel before:
+### Excel before:
 <img width="449" height="368" alt="before" src="https://github.com/user-attachments/assets/b6e4976c-f345-4632-b1f2-f037c0742b59" />
 
-## Excel after:
+### Excel after:
 <img width="443" height="367" alt="after" src="https://github.com/user-attachments/assets/d6c09d89-5810-4561-afba-e32324cd7ef0" />
 
-## EMAIL Alerts:
+### EMAIL Alerts:
 
 <img width="661" height="223" alt="image" src="https://github.com/user-attachments/assets/c183e0c1-315a-4ab2-839e-f3f23827c2ef" />
 
