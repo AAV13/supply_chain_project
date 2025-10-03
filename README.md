@@ -5,6 +5,19 @@ This project is a comprehensive, AI-driven solution for intelligent inventory ma
 
 The system analyzes inventory levels, predicts reorder points, provides strategic alerts about logistical risks, and uses a Large Language Model (Google Gemini) to deliver human-readable summaries and action plans.
 
+##📈 Results and Business Impact
+Actionable Insights: The analysis successfully identified key bottlenecks in the supply chain and highlighted the most profitable products and markets, providing a clear path for strategic business decisions.
+
+Predictive Power: The demand forecasting model provides a reliable tool for inventory management, helping to prevent overstocking and stockouts.
+
+Strategic Recommendations: Based on the findings, key recommendations include:
+
+Reviewing logistics partners for the Western US region.
+
+Increasing stock levels for the top 5 product categories during peak sales months (identified as September-November).
+
+Developing targeted marketing campaigns for the most profitable customer segments.
+
 ## Key Features
 ### API & Forecasting Engine
 * **Multi-Model Demand Forecasting:** Trains a separate, specialized `Prophet` model for each product category.
