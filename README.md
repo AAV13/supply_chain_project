@@ -169,7 +169,7 @@ uvicorn main:app --reload
 ## API Usage
 Once the server is running, you can access the interactive API documentation (Swagger UI) in your browser at: http://127.0.0.1:8000/docs
 
-The production API is also live on Railway: https://www.google.com/search?q=https://supplychainproject-production.up.railway.app/docs
+The production API is also live on Railway: https://supplychainproject-production.up.railway.app/docs
 
 POST /recommendations/{category_name}
 Provides inventory and strategic analysis for a given product category.
