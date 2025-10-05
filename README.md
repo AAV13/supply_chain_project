@@ -8,7 +8,7 @@ It combines a **FastAPI-powered recommendation engine** with a sophisticated **n
 The system analyzes inventory levels, predicts reorder points, provides strategic alerts about logistical risks, and uses a Large Language Model (Google Gemini) to deliver human-readable summaries and action plans.
 
 ## 📈 Results and Business Impact
-Actionable Insights: The AI-agent successfully identified key bottlenecks in the supply chain and highlighted the most profitable products and markets, providing a clear path for strategic business decisions.
+Actionable Insights: The analysis successfully identified key bottlenecks in the supply chain and highlighted the most profitable products and markets, providing a clear path for strategic business decisions.
 
 **Predictive Power:** The demand forecasting model provides a reliable tool for inventory management, helping to prevent overstocking and stockouts.
 
