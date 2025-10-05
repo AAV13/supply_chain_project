@@ -1,14 +1,16 @@
-# AI-Powered Supply Chain Optimization & Automation
+# AI Supply Chain Analyst: Optimization & Automation Agent
 
 ## Overview
-This project is a comprehensive, AI-driven solution for intelligent inventory management. It combines a **FastAPI-powered recommendation engine** with a sophisticated **n8n automation workflow** to provide real-time analysis, strategic alerts, and automated reporting directly within a Google Sheet.
+This project builds an AI-powered system that analyzes inventory data, predicts demand, and automates reporting. It demonstrates how data science, forecasting models, and workflow automation can improve real-world supply chain efficiency.
+
+It combines a **FastAPI-powered recommendation engine** with a sophisticated **n8n automation workflow** to provide real-time analysis, strategic alerts, and automated reporting directly within a Google Sheet.
 
 The system analyzes inventory levels, predicts reorder points, provides strategic alerts about logistical risks, and uses a Large Language Model (Google Gemini) to deliver human-readable summaries and action plans.
 
 ## 📈 Results and Business Impact
-Actionable Insights: The analysis successfully identified key bottlenecks in the supply chain and highlighted the most profitable products and markets, providing a clear path for strategic business decisions.
+Actionable Insights: The AI-agent successfully identified key bottlenecks in the supply chain and highlighted the most profitable products and markets, providing a clear path for strategic business decisions.
 
-Predictive Power: The demand forecasting model provides a reliable tool for inventory management, helping to prevent overstocking and stockouts.
+**Predictive Power:** The demand forecasting model provides a reliable tool for inventory management, helping to prevent overstocking and stockouts.
 
 Strategic Recommendations: Based on the findings, key recommendations include:
 
