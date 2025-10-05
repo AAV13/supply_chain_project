@@ -1,6 +1,6 @@
 # AI Supply Chain Analyst: Optimization & Automation Agent
 
-## 🚀 Overview
+## Overview
 
 This project is an end-to-end automated system designed to optimize supply chain inventory management. It uses machine learning to **forecast product demand** and then leverages those predictions to calculate optimal **Reorder Points (ROP)** and **Economic Order Quantities (EOQ)**.
 
@@ -20,7 +20,7 @@ This system moves inventory management from a reactive to a proactive model. Bas
 
 ---
 
-## 🛠️ System Architecture
+## System Architecture
 
 The project consists of two main components that create a closed-loop automation system:
 
