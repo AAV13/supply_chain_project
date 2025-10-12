@@ -20,8 +20,6 @@ This system moves inventory management from a reactive to a proactive model. Bas
 
 ## System Architecture
 
-<img width="820" height="330" alt="workflowscreenshot" src="https://github.com/user-attachments/assets/8b7bc273-7d1c-4b78-8892-2f6a58da7bfa" />
-
 The project consists of two main components that create a closed-loop automation system:
 
 1.  **FastAPI Backend (The "Brain"):**
@@ -29,6 +27,8 @@ The project consists of two main components that create a closed-loop automation
     * **Inventory Logic:** Uses the demand forecast to calculate the dynamic ROP (when to order) and EOQ (how much to order).
     * **MLOps:** All model training experiments, parameters (like `n_estimators`), and performance metrics (RMSE) are logged with **MLflow**.
     * **Deployment:** The API is containerized and deployed on **Railway**, providing a reliable and scalable endpoint.
+
+<img width="820" height="330" alt="workflowscreenshot" src="https://github.com/user-attachments/assets/8b7bc273-7d1c-4b78-8892-2f6a58da7bfa" />
 
 2.  **n8n Workflow (The "Automation Engine"):**
     * **Scheduled Trigger:** Runs automatically on a schedule (e.g., weekly).
