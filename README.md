@@ -6,8 +6,6 @@ This project is an end-to-end automated system designed to optimize supply chain
 
 The system is built as a REST API using **FastAPI** and is integrated with an **n8n automation workflow** that reads data from a Google Sheet, gets AI-driven recommendations, and triggers real-time alerts. The entire ML lifecycle is tracked using **MLflow** for complete reproducibility.
 
-
-
 ---
 
 ## 📈 Business Impact & Quantified Results
@@ -21,6 +19,8 @@ This system moves inventory management from a reactive to a proactive model. Bas
 ---
 
 ## System Architecture
+
+<img width="820" height="330" alt="workflowscreenshot" src="https://github.com/user-attachments/assets/8b7bc273-7d1c-4b78-8892-2f6a58da7bfa" />
 
 The project consists of two main components that create a closed-loop automation system:
 
