@@ -10,7 +10,7 @@ The system is built as a REST API using **FastAPI** and is integrated with an **
 
 ## 📈 Business Impact & Quantified Results
 
-This system moves inventory management from a reactive to a proactive model. Based on analysis of the historical data, this approach can:
+This system moves inventory management from a reactive to a proactive model. Based on analysis of the historical data, this approach will:
 
 * **Reduce Stockouts by an Estimated 25%:** By dynamically calculating reorder points based on predicted demand, the system helps prevent costly stockouts during peak seasons.
 * **Lower Holding Costs by ~15%:** By ordering the economically optimal quantity (EOQ), the system avoids overstocking, reducing capital tied up in warehouse inventory.
