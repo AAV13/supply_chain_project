@@ -23,11 +23,10 @@ This system moves inventory management from a reactive to a proactive model. Bas
 The project consists of two main components that create a closed-loop automation system:
 
 1.  **FastAPI Backend (The "Brain"):**
-    * **ML Core:** A separate **Random Forest Regressor** is trained for each product category to accurately predict demand for the next 30 days.
-    * **Inventory Logic:** Uses the demand forecast to calculate the dynamic ROP (when to order) and EOQ (how much to order).
-    * **MLOps:** All model training experiments, parameters (like `n_estimators`), and performance metrics (RMSE) are logged with **MLflow**.
+    * **ML Core:** A separate **Prophet** time-series model is trained for each product category to accurately predict demand for the next 30 days.
+    * **Inventory Logic:** Uses the probabilistic demand forecast to calculate the dynamic ROP (when to order) and EOQ (how much to order).
+    * **MLOps:** All model training experiments, parameters (like changepoint_prior_scale), and performance metrics are logged with **MLflow**.
     * **Deployment:** The API is containerized and deployed on **Railway**, providing a reliable and scalable endpoint.
-
 
    <img width="820" height="330" alt="workflowscreenshot" src="https://github.com/user-attachments/assets/8b7bc273-7d1c-4b78-8892-2f6a58da7bfa" />
 
